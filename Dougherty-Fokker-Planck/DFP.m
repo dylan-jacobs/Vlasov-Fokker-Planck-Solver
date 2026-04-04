@@ -1,218 +1,246 @@
 clc; clear variables; close all;
-
-% initial rank
-r0 = 10;
-% time-stepping method: 1=B.Euler, 2=DIRK2, 3=DIRK3
-method = '1';
+lambdavals = (0.2:0.1:6)'; 
+lambdavals = 1; % for non accuracy plots
+% lambdavals = [0.01]; % for reference soln
+soln = load('./DFP Reference Solutions/dfp_refsoln_dirk3.mat');
+f_exact = soln.f;
+errors = zeros(numel(lambdavals), 3);
+methods = ['1', '2', '3']; % time-stepping method: 1=B.Euler, 2=DIRK2, 3=DIRK3
 tolerance = 1e-6;
 
 % mesh parameters
-rmin = 0; rmax = 1;
-zmin = 0; zmax = 1;
-Nr = 40; Nz = 80;
-tf = 1;
+vmin = 0; vmax = 14;
+zmin = -16; zmax = 16;
+Nr = 100; Nz = 100;
+tf = 25;
 
-[Rmat, Zmat, dr, dz] = GetRZ(rmin, rmax, zmin, zmax, Nr, Nz);
+[Rmat, Zmat, dr, dz] = GetRZ(vmin, vmax, zmin, zmax, Nr, Nz);
 rvals = Rmat(:, 1);
 zvals = Zmat(1, :)';
 
-% % initial conditions
-% f_M = @(vr,vz,n,ur,uz,T,R) (n/(2*pi*R*T)^(3/2)).*exp(-(vr.^2+(vz-uz).^2)./(2*R*T)); %assumes ur=0!!!
-j01 = 2.40482555769577; % first root of bessel function
-f0 = @(r, z) (besselj(0, (j01/(rmax-rmin))*r)) .* (sin((2*pi/(zmax-zmin))*z));
-f_exact = @(r, z, t) (exp(-t*(((j01/(rmax-rmin))^2) + (2*pi/(zmax-zmin))^2))*f0(r, z));
-f_exact = f_exact(Rmat, Zmat, tf);
+% initial conditions
+f_M = @(vr,vz,n,ur,uz,T,R) (n/(2*pi*R*T)^(3/2)).*exp(-(vr.^2+(vz-uz).^2)./(2*R*T)); %assumes ur=0!!!
 
-f = f0(Rmat, Zmat);
-
-% discrete moments of f0
-rho0 = sum(sum(f.*Rmat))*2*pi*dr*dz;
-Jz0  = sum(sum(f.*Rmat.*Zmat))*2*pi*dr*dz;
-kappa0   = sum(sum(f.*Rmat.*((Rmat.^2 + Zmat.^2)/2)))*2*pi*dr*dz;
+n1 = 2;
+u1r = 0;
+u1z = -0.5;
+T1 = 2;
+n2 = 1;
+u2r = 0;
+u2z = 0.9;
+T2 = 1;
 R = 1;
 
-% [f_inf, n_inf, uz_inf, T_inf] = QCM(rho0, Jz0, kappa0, R, Rmat, Zmat);
-
-% moments at equilibrium
-rhoM = rho0;
-JzM = Jz0;
-kappaM = kappa0;
-
-ur_inf = 0; % no drift in r
-ur = 0; %ur_inf;
-uz = 0; %uz_inf;
-
-lambdavals = (0.2:0.1:5)';
-errors = zeros(numel(lambdavals), 3);
-methods = ['1', '2', '3'];
-
-for x = 1:1
-method = methods(x);
-
 for k = 1:numel(lambdavals)
-lambdavals(k)
-dt = lambdavals(k)/((1/dr) + (1/dz));
-tvals = (0:dt:tf)';
-if tvals(end) ~= tf
-    tvals = [tvals; tf];
-end
-Nt = numel(tvals);
-
-Ar = @(u, w, t) w; %cell centers
-Br = @(u, w, t) 0; %evaluated on cell boundaries
-Cr = @(u, w, t) w;%D_inf*w; %evaluated cell boundaries
-Az = @(u, w, t) w.^0;
-Bz = @(u, w, t) 0;
-Cz = @(u, w, t) w.^0;%D_inf*w.^0;
-
-% init bases
-[Vr, S, Vz] = svd2(f, rvals);
-r0 = min(r0, size(Vr, 2));
-Vr = Vr(:, 1:r0); S = S(1:r0, 1:r0); Vz = Vz(:, 1:r0);
-
-% store rank, mass, momentum, energy, l1 decay, etc...
-l1 = zeros(Nt, 1);
-mass = zeros(Nt, 1);
-Jzvals = zeros(Nt, 1);
-E = zeros(Nt, 1);
-relative_entropy = zeros(Nt, 1);
-min_vals = zeros(Nt, 1);
-ranks = zeros(Nt, 1);
-
-% l1(1) = 2*pi*dr*dz*sum(sum(abs(Rmat .* (f - f_inf))));
-% mass(1) = rho0;
-% Jzvals(1) = Jz0;
-% E(1) = kappa0;
-% relative_entropy(1) = 2*pi*dr*dz*sum(sum(Rmat .* f.*(log(f./f_inf))));
-% min_vals(1) = min(min(f));
-% ranks(1) = r0;
-
-% time-stepping loop
-for n = 2:Nt
-    tval = tvals(n);
-    dt = tval - tvals(n-1);
-    switch(method)
-        case '1'
-            [Vr, S, Vz, rank] = BackwardEulerTimestep(Vr, S, Vz, ur, uz, dt, tval, rvals, zvals, Rmat, Zmat, Ar, Az, Br, Bz, Cr, Cz, tolerance, rhoM, JzM, kappaM);
-        case '2'
-            [Vr, S, Vz, rank] = DIRK2Timestep(Vr, S, Vz, ur, uz, dt, tval, rvals, zvals, Rmat, Zmat, Ar, Az, Br, Bz, Cr, Cz, tolerance, rhoM, JzM, kappaM);
-        case '3'
-            [Vr, S, Vz, rank] = DIRK3Timestep(Vr, S, Vz, ur, uz, dt, tval, rvals, zvals, Rmat, Zmat, Ar, Az, Br, Bz, Cr, Cz, tolerance, rhoM, JzM, kappaM);
+    dt = lambdavals(k)/((1/dr) + (1/dz));
+    disp(['dt=', num2str(dt), ', Progress: ', num2str(k), '/', num2str(numel(lambdavals))]);
+    tvals = (0:dt:tf)';
+    if tvals(end) ~= tf
+        tvals = [tvals; tf];
     end
-
-    % l1(n) = 2*pi*dr*dz*sum(sum(abs(Rmat .* (f - f_inf))));
-    % mass(n) = 2*pi*dr*dz*sum(sum(Rmat .* f));    
-    % Jzvals(n) = 2*pi*dr*dz*sum(sum(f .* Rmat .* Zmat));
-    % E(n) = pi*dr*dz*sum(sum(f .* (Rmat.^2 + Zmat.^2) .* Rmat));
-    % relative_entropy(n) = 2*pi*dr*dz*sum(sum(Rmat .* f.*(log((f+1e-16)./(f_inf+1e-16)))));
-    % min_vals(n) = min(min(f));
-    % ranks(n) = rank;
+    Nt = numel(tvals);
+    
+    % store rank, mass, momentum, energy, l1 decay, etc...
+    l1 = zeros(Nt, 3);
+    mass = zeros(Nt, 1);
+    Jzvals = zeros(Nt, 1);
+    E = zeros(Nt, 1);
+    relative_entropy = zeros(Nt, 3);
+    min_vals = zeros(Nt, 3);
+    ranks = zeros(Nt, 3);
+    
+    for x = 1:3
+        method = methods(x);
+        
+        f0 = @(vr,vz) f_M(vr,vz,n1,u1r,u1z,T1,R) + f_M(vr,vz,n2,u2r,u2z,T2,R); % IC
+        f = f0(Rmat,Zmat);
+        
+        % discrete moments of f0
+        rho0 = sum(sum(f.*Rmat))*2*pi*dr*dz;
+        Jz0  = sum(sum(f.*Rmat.*Zmat))*2*pi*dr*dz;
+        kappa0   = sum(sum(f.*Rmat.*((Rmat.^2 + Zmat.^2)/2)))*2*pi*dr*dz;
+        
+        [f_inf, n_inf, uz_inf, T_inf] = QCM(rho0, Jz0, kappa0, R, Rmat, Zmat);
+        
+        % moments at equilibrium
+        rhoM = rho0;
+        JzM = Jz0;
+        kappaM = kappa0;
+        
+        ur_inf = 0; % no drift in r
+        ur = ur_inf;
+        uz = uz_inf;
+        D_inf = R*T_inf;
+        
+        Ar = @(u, w, t) w; %cell centers
+        Br = @(u, w, t) w.*(w - u); %evaluated on cell boundaries
+        Cr = @(u, w, t) D_inf*w; %evaluated cell boundaries
+        Az = @(u, w, t) w.^0;
+        Bz = @(u, w, t) w - u;
+        Cz = @(u, w, t) D_inf*w.^0;
+        
+        % init bases
+        [Vr, S, Vz] = svd2(f, rvals);
+        r0 = min(10, size(Vr, 2)); % initial rank r0
+        Vr = Vr(:, 1:r0); S = S(1:r0, 1:r0); Vz = Vz(:, 1:r0);
+        
+        l1(1, x) = 2*pi*dr*dz*sum(sum(abs(Rmat .* (f - f_inf))));
+        mass(1) = rho0;
+        Jzvals(1) = Jz0;
+        E(1) = kappa0;
+        relative_entropy(1, x) = 2*pi*dr*dz*sum(sum(Rmat .* f.*(log(f./f_inf))));
+        min_vals(1, x) = min(min(f));
+        ranks(1, x) = r0;
+        
+        % time-stepping loop
+        for n = 2:Nt
+            tval = tvals(n);
+            dt = tval - tvals(n-1);
+            disp(['Method: ', method, ', t=', num2str(tval)]);
+            switch(method)
+                case '1'
+                    [Vr, S, Vz, rank] = BackwardEulerTimestep(Vr, S, Vz, ur, uz, dt, tval, rvals, zvals, Rmat, Zmat, Ar, Az, Br, Bz, Cr, Cz, tolerance, rhoM, JzM, kappaM);
+                case '2'
+                    [Vr, S, Vz, rank] = DIRK2Timestep(Vr, S, Vz, ur, uz, dt, tval, rvals, zvals, Rmat, Zmat, Ar, Az, Br, Bz, Cr, Cz, tolerance, rhoM, JzM, kappaM);
+                case '3'
+                    [Vr, S, Vz, rank] = DIRK3Timestep(Vr, S, Vz, ur, uz, dt, tval, rvals, zvals, Rmat, Zmat, Ar, Az, Br, Bz, Cr, Cz, tolerance, rhoM, JzM, kappaM);
+            end
+        
+            f = Vr*S*Vz';
+            
+            l1(n, x) = 2*pi*dr*dz*sum(sum(abs(Rmat .* (f - f_inf))));
+            mass(n) = 2*pi*dr*dz*sum(sum(Rmat .* f));    
+            Jzvals(n) = 2*pi*dr*dz*sum(sum(f .* Rmat .* Zmat));
+            E(n) = pi*dr*dz*sum(sum(f .* (Rmat.^2 + Zmat.^2) .* Rmat));
+            relative_entropy(n, x) = 2*pi*dr*dz*sum(sum(Rmat .* f.*(log((f+1e-16)./(f_inf+1e-16)))));
+            min_vals(n, x) = min(min(f));
+            ranks(n, x) = rank;
+        end
+        
+        errors(k, x) = 2*pi*dr*dz*sum((sum(Rmat .* abs(f - f_exact)))); % L1 error
+    
+    end
 end
 
-f = Vr*S*Vz';
-figure(1); clf; surf(Rmat, Zmat, f);
-colorbar; shading interp;
-legend(sprintf('N_r = %s', num2str(Nr, 3)), 'Location','northwest');
-xlabel('V_r'); ylabel('V_z'); zlabel('U'); title([sprintf('Backward Euler approximation of 0D2V Fokker-Planck system at time %s', num2str(tf, 4))]);
-
-figure(2); clf; surf(Rmat, Zmat, f_exact);
-colorbar; shading interp;
-legend(sprintf('N_r = %s', num2str(Nr, 3)), 'Location','northwest');
-xlabel('V_r'); ylabel('V_z'); zlabel('U'); title([sprintf('Backward Euler approximation of 0D2V Fokker-Planck system at time %s', num2str(tf, 4))]);
-
-errors(k, x) = 2*pi*dr*dz*sum((sum(Rmat .* abs(f - f_exact)))); % L1 error
-end
-end
+% save reference soln
+% save('dfp_refsoln_dirk3.mat', 'f', 'mass', 'Jzvals', 'E');
 %%
-figure(1); clf; surf(Rmat, Zmat, f);
+c_blue   = [0.1216 0.4667 0.7059];
+c_orange = [1.0000 0.4980 0.0549];
+c_green  = [0.1725 0.6275 0.1725];
+c_red    = [0.8392 0.1529 0.1569];
+c_purple = [0.5804 0.4039 0.7412];
+c_brown  = [0.5490 0.3373 0.2941];
+c_pink   = [0.8902 0.4667 0.7608];
+c_gray   = [0.4980 0.4980 0.4980];
+
+% Temporal accuracy
+cutoff = 0.2;
+figure(1); clf;
+loglog(lambdavals, errors(:, 1), '-', 'Color', c_blue, 'LineWidth', 1.5); hold on;
+loglog(lambdavals(ceil(cutoff*end):end), 9e-3*(lambdavals(ceil(cutoff*end):end) .^ 1), '--', 'Color', c_blue, 'LineWidth', 1.5);
+loglog(lambdavals, errors(:, 2), '-', 'Color', c_orange, 'LineWidth', 1.5); hold on;
+loglog(lambdavals(ceil(cutoff*end):end), 2e-4*(lambdavals(ceil(cutoff*end):end) .^ 2), '--', 'Color', c_orange, 'LineWidth', 1.5);
+loglog(lambdavals, errors(:, 3), '-', 'Color', c_green,  'LineWidth', 1.5); hold on;
+loglog(lambdavals(ceil(cutoff*end):end), 2.5e-5*(lambdavals(ceil(cutoff*end):end) .^ 3), '--', 'Color', c_green, 'LineWidth', 1.5);
+xlabel('\lambda'); ylabel('L_1 error'); % title('Error plot');
+legend('Backward Euler', 'Order 1', 'DIRK2','Order 2', 'DIRK3', 'Order 3', 'Location', 'eastoutside');
+fontsize(18,"points");
+set(gcf,'Units','pixels','Position', [100 100 800 500]);
+% exportgraphics(gcf,'./Plots/DFP_temporal_error_plot.pdf','ContentType','vector')
+
+% Numerical solution
+figure(2); clf; surf(Rmat, Zmat, f);
 colorbar; shading interp;
-legend(sprintf('N_r = %s', num2str(Nr, 3)), 'Location','northwest');
-xlabel('V_r'); ylabel('V_z'); zlabel('U'); title([sprintf('Backward Euler approximation of 0D2V Fokker-Planck system at time %s', num2str(tf, 4))]);
+xlabel('V_r'); ylabel('V_z'); zlabel('f'); % title([sprintf('DIRK3 numerical solution at time %s', num2str(tf, 4))]);
+fontsize(18,"points");
+set(gcf,'Units','pixels','Position', [100 100 800 500]);
+exportgraphics(gcf,'./Plots/DFP_numerical_solution.pdf','ContentType','vector')
 
-figure(2); clf; surf(Rmat, Zmat, f_exact);
+% Exact solution
+figure(3); clf; surf(Rmat, Zmat, f_exact);
 colorbar; shading interp;
-xlabel('V_r'); ylabel('V_z'); zlabel('f(V_r, V_z, t)'); title([sprintf('f_{exact} at time t=%s', num2str(tf, 4))]);
+xlabel('V_r'); ylabel('V_z'); zlabel('f_{exact}'); % title([sprintf('f_{exact} at time t=%s', num2str(tf, 4))]);
+fontsize(18,"points");
+set(gcf,'Units','pixels','Position', [100 100 800 500]);
+exportgraphics(gcf,'./Plots/DFP_exact_solution.pdf','ContentType','vector')
 
-
-figure(8); clf;
-loglog(lambdavals, errors(:, 1), 'b-', 'LineWidth', 1.5); hold on;
-loglog(lambdavals, 5e-5*(lambdavals .^ 1), 'b--', 'LineWidth', 1.5);
-loglog(lambdavals, errors(:, 2), 'r-', 'LineWidth', 1.5); hold on;
-loglog(lambdavals, 5e-5*(lambdavals .^ 2), 'r--', 'LineWidth', 1.5);
-xlabel('\lambda'); ylabel('Accuracy'); title('Accuracy plot');
-legend('Backward Euler', '$\mathcal{O}(1)$', 'DIRK2','$\mathcal{O}(2)$', 'interpreter', 'latex');
-return
-
-% figure(1); clf; surf(Rmat, Zmat, f);
-% colorbar; shading interp;
-% legend(sprintf('N_r = %s', num2str(Nr, 3)), 'Location','northwest');
-% xlabel('V_r'); ylabel('V_z'); zlabel('U'); title([sprintf('Backward Euler approximation of 0D2V Fokker-Planck system at time %s', num2str(tf, 4))]);
-% 
-% figure(2); clf; surf(Rmat, Zmat, f_inf);
-% colorbar; shading interp;
-% xlabel('V_r'); ylabel('V_z'); zlabel('f(V_r, V_z, t)'); title([sprintf('f_{exact} at time t=%s', num2str(tf, 4))]);
-%%
-epsval = 1e-14;
-
-% L1 decay
-% l1 = max(real(l1), epsval);
-% 
-% % Relative entropy
-% relative_entropy = max(real(relative_entropy), epsval);
-
-semilogy(tvals, l1, 'LineWidth', 1.5)
-hold on
-semilogy(tvals, relative_entropy, 'LineWidth', 1.5)
-hold off
-legend('L1 decay', 'Relative entropy')
-xlabel('Time')
-ylabel('Magnitude')
-return
-%%
-% l1 decay
-
-semilogy(tvals, l1, 'LineWidth', 1.5); hold on;
-% xlabel('t'); ylabel('L_1(f(V_r, V_z))'); title('L_1 drive to equilibrium solution');
+%% L1 decay
+figure(4); clf; 
+semilogy(tvals, l1(:, 1), 'LineWidth', 1.5);hold on;
+semilogy(tvals, l1(:, 2), 'LineWidth', 1.5);
+semilogy(tvals, l1(:, 3), 'LineWidth', 1.5);
+xlabel('t'); ylabel('|| f - f_{inf} ||_1'); % title('L_1 drive to equilibrium solution');
+legend('Backward Euler', 'DIRK2', 'DIRK3', 'Location', 'eastoutside');
+fontsize(18,"points");
+set(gcf,'Units','pixels','Position', [100 100 800 500]);
+exportgraphics(gcf,'./Plots/DFP_L1_decay.pdf','ContentType','vector')
 
 % Relative entropy
-semilogy(tvals, relative_entropy,  'LineWidth', 1.5);
-% xlabel('t'); ylabel('Relative entropy'); title('Relative entropy decay');
-hold off
-legend('L1 decay', 'Relative entropy')
-xlabel('Time')
-ylabel('Magnitude')
-ylim([1e-15, 1e0]);
-title('L_1 drive to equilibrium solution and relative entropy decay');
-return
+figure(5); clf;
+semilogy(tvals, relative_entropy(:, 1), 'LineWidth', 1.5); hold on;
+semilogy(tvals, relative_entropy(:, 2), 'LineWidth', 1.5);
+semilogy(tvals, relative_entropy(:, 3), 'LineWidth', 1.5);
+xlabel('t'); ylabel('Relative entropy decay'); % title('Relative entropy decay');
+legend('Backward Euler', 'DIRK2', 'DIRK3', 'Location', 'eastoutside');
+fontsize(18,"points");
+set(gcf,'Units','pixels','Position', [100 100 800 500]);
+exportgraphics(gcf,'./Plots/DFP_relative_entropy.pdf','ContentType','vector')
+
 %%
 % Positivity
-figure(4); clf; plot(tvals, min_vals, 'green-', 'LineWidth', 1.5);
-xlabel('t'); ylabel('min(f(V_r, V_z))'); title('Minimum values of numerical solution over time');
+figure(6); clf; plot(tvals, min_vals, 'LineWidth', 1.5);
+xlabel('t'); ylabel('Minimum value'); % title('Minimum values of numerical solution');
+legend('Backward Euler', 'DIRK2', 'DIRK3', 'Location', 'eastoutside');
+fontsize(18,"points");
+set(gcf,'Units','pixels','Position', [100 100 800 500]);
+exportgraphics(gcf,'./Plots/DFP_min_vals.pdf','ContentType','vector')
+
 
 % Mass
-figure(6); clf; plot(tvals(2:end), abs(mass(2:end)-mass(1))/mass(1), 'red-', 'LineWidth', 1.5);
-xlabel('t'); ylabel('relative mass'); title('Relative mass of numerical solution over time');
-figure(7); clf; plot(tvals(2:end), abs(Jzvals(2:end)-Jzvals(1)), 'red-', 'LineWidth', 1.5);
-xlabel('t'); ylabel('Absolute error (Uz)'); title('Absolute error of bulk velocity over time');
-figure(8); clf; plot(tvals(2:end), abs(E(2:end)-E(1))/E(1), 'red-', 'LineWidth', 1.5);
-xlabel('t'); ylabel('Relative error (Energy)'); title('Relative energy of numerical solution over time');
-
-
+figure(7); clf; hold on;
+plot(tvals(2:end), abs(mass(2:end)-mass(1))/mass(1), 'LineWidth', 1.5);
+figure(7); plot(tvals(2:end), abs(Jzvals(2:end)-Jzvals(1)), 'LineWidth', 1.5);
+figure(7);  plot(tvals(2:end), abs(E(2:end)-E(1))/E(1), 'LineWidth', 1.5);
+xlabel('t'); ylabel('Variation'); % title('Mass, momentum, and energy conservation');
+legend('Relative mass deviation', 'Absolute momentum deviation', 'Relative energy deviation', 'Location', 'eastoutside');
+fontsize(18,"points");
+set(gcf,'Units','pixels','Position', [100 100 800 500]);
+exportgraphics(gcf,'./Plots/DFP_structure_conservation.pdf','ContentType','vector')
 
 % Rank plot
-figure(9); clf;
-plot(tvals, ranks, 'black-', 'LineWidth', 1.5); hold on;
-% plot(ranks2(:, 1), ranks2(:, 2), 'blue-', 'LineWidth', 1.5);
-% plot(ranks3(:, 1), ranks3(:, 2), 'green-', 'LineWidth', 1.5);
-xlabel('time'); ylabel('rank'); title('Rank plot over time');
-legend('Backward Euler', 'RK2', 'RK3');
+figure(8); clf; hold on;
+plot(tvals, ranks(:, 1), 'LineWidth', 1.5); hold on;
+plot(tvals, ranks(:, 2), 'LineWidth', 1.5);
+plot(tvals, ranks(:, 3), 'LineWidth', 1.5);
+xlabel('t'); ylabel('Rank'); % title('Rank plot');
+legend('Backward Euler', 'DIRK2', 'DIRK3', 'Location', 'eastoutside');
+fontsize(18,"points");
+set(gcf,'Units','pixels','Position', [100 100 800 500]);
+exportgraphics(gcf,'./Plots/DFP_rank_plot.pdf','ContentType','vector')
+
+
+%% ---- SPATIAL ACCURACY ---- %%
+
+disp('Errors:');
+disp('Backward Euler');
+disp(errors(:, 1));
+disp(log2(errors(1:end-1, 1)./errors(2:end, 1)));
+disp('DIRK2');
+disp(errors(:, 2));
+disp(log2(errors(1:end-1, 2)./errors(2:end, 2)));
+disp('DIRK3');
+disp(errors(:, 3));
+disp(log2(errors(1:end-1, 3)./errors(2:end, 3)));
 
 
 
 
-%%%%%% FUNCTIONS %%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% ---- HELPER FUNCTIONS ---- %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 function [Flux] = GetFlux(A, B, C, u, xvals, t, dx)
-    C_func = C;
     N = numel(xvals);
     A = A(u, xvals, t);
     B = B(u, xvals(1:N-1) + dx/2, t);
@@ -226,9 +254,6 @@ function [Flux] = GetFlux(A, B, C, u, xvals, t, dx)
 
     F_pos = spdiags([F1;0], 0, N, N) + spdiags([0;F2], 1, N, N);
     F_neg = spdiags([0; F2], 0, N, N) + spdiags(F1, -1, N, N);
-
-    % F_pos = spdiags([F1;-3*C_func(u, xvals(end) + dx/2, t)], 0, N, N) + spdiags([0;F2], 1, N, N);
-    % F_neg = spdiags([0; F2], 0, N, N) + spdiags([F1;(1/3)*C_func(u, xvals(end) + dx/2)], -1, N, N);
 
     Flux = diag(1./A)*(1/dx)*(F_pos - F_neg);
 end
@@ -258,8 +283,7 @@ function [Vr, S, Vz, rank] = BackwardEulerTimestep(Vr0, S0, Vz0, ur, uz, dt, tva
     [Vr1_hat, Vz1_hat] = reduced_augmentation([Vr1_ddagger, Vr0], [Vz1_ddagger, Vz0], rvals);
 
     S1_hat = sylvester((speye(size(Vr1_hat, 2)) - (dt*((rvals .* Vr1_hat)')*(Fr1*Vr1_hat))), -dt*(Fz1*Vz1_hat)'*Vz1_hat, ((rvals .* Vr1_hat)'*Vr0)*S0*((Vz0')*Vz1_hat));
-    % [Vr, S, Vz, rank] = LoMaC(Vr1_hat, S1_hat, Vz1_hat, Rmat, Zmat, rvals, zvals, tolerance, rhoM, JzM, kappaM);
-    [Vr, S, Vz, rank] = truncate_svd(Vr1_hat, S1_hat, Vz1_hat, tolerance);
+    [Vr, S, Vz, rank] = LoMaC(Vr1_hat, S1_hat, Vz1_hat, Rmat, Zmat, rvals, zvals, tolerance, rhoM, JzM, kappaM);
 end
 
 function [Vr, S, Vz, rank] = DIRK2Timestep(Vr0, S0, Vz0, ur, uz, dt, tval, rvals, zvals, Rmat, Zmat, Ar, Az, Br, Bz, Cr, Cz, tolerance, rhoM, JzM, kappaM)
