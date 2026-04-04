@@ -1,4 +1,6 @@
 *.fig
-/Plots/
+*./Plots/
 *.png
 *jpg
+*.asv
+*.pdf
