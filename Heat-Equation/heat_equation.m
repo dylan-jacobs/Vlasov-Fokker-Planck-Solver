@@ -11,129 +11,154 @@ r0 = 10;
 methods = ['1', '2', '3', '4'];
 tolerance = 1e-6;
 
-lambdavals = (0.02:0.02:7)'; % lambdavals = 0.1;
-errors = zeros(numel(lambdavals), 4);
+lambdavals = (0.02:0.02:10)'; % lambdavals = 0.1;
+errors = zeros(numel(lambdavals), 4, 2);
 
-% mesh parameters
-rmin = 0; rmax = 1;
-zmin = 0; zmax = 1;
-Nr = 40; Nz = 80;
-[Rmat, Zmat, dr, dz] = GetRZ(rmin, rmax, zmin, zmax, Nr, Nz);
-rvals = Rmat(:, 1);
-zvals = Zmat(1, :)';
+Nrvals = [40, 80];
+Nzvals = [80, 160];
 
-% final time
-tf = 0.3;
+for spatial_accuracy_test_idx = 1:1
 
-Drr = gallery('tridiag', Nr, rvals(1:end-1)+(dr/2), -2*rvals, rvals(1:end-1)+(dr/2));
-Drr(1, 1) = -(rvals(1) + (dr/2));
-Drr(end, end-1) = ((1/3) * (rvals(end) + (dr/2))) + (rvals(end) - (dr/2));
-Drr(end, end) =  ((-3) * (rvals(end) + (dr/2))) - (rvals(end) - (dr/2));
-Drr = (1/(dr^2)) * (diag(1./rvals) * Drr);
-
-% Dzz = (1/dz^2)*gallery('tridiag', Nz, 1, -2, 1); % centered nodes
-
-Dzz = (2*pi/zmax)^2*toeplitz([-1/(3*(2*dz/zmax)^2)-1/6 ...
-.5*(-1).^(2:Nz)./sin((2*pi*dz/zmax)*(1:Nz-1)/2).^2]);
-
-for x = 1:4
-    method = methods(x);
+    % mesh parameters
+    rmin = 0; rmax = 1;
+    zmin = 0; zmax = 1;
+    % Nr = 40; Nz = 80;
+    Nr = Nrvals(spatial_accuracy_test_idx);
+    Nz = Nzvals(spatial_accuracy_test_idx);
+    [Rmat, Zmat, dr, dz] = GetRZ(rmin, rmax, zmin, zmax, Nr, Nz);
+    rvals = Rmat(:, 1);
+    zvals = Zmat(1, :)';
     
-    for k = 1:numel(lambdavals)
-        dt = lambdavals(k)/((1/dr) + (1/dz));
-        disp(['Method: ', method, ', dt=', num2str(dt, 3), ', ', num2str(k), '/', num2str(numel(lambdavals))]);
-        tvals = (0:dt:tf)';
-        if tvals(end) ~= tf
-            tvals = [tvals; tf];
-        end
-        Nt = numel(tvals);
+    % final time
+    tf = 0.1;
+    
+    Drr = gallery('tridiag', Nr, rvals(1:end-1)+(dr/2), -2*rvals, rvals(1:end-1)+(dr/2));
+    Drr(1, 1) = -(rvals(1) + (dr/2));
+    Drr(end, end-1) = ((1/3) * (rvals(end) + (dr/2))) + (rvals(end) - (dr/2));
+    Drr(end, end) =  ((-3) * (rvals(end) + (dr/2))) - (rvals(end) - (dr/2));
+    Drr = (1/(dr^2)) * (diag(1./rvals) * Drr);
+    
+    Dzz = (1/dz^2)*gallery('tridiag', Nz, 1, -2, 1); % centered nodes
+    
+    % Dzz = (2*pi/zmax)^2*toeplitz([-1/(3*(2*dz/zmax)^2)-1/6 ...
+    % .5*(-1).^(2:Nz)./sin((2*pi*dz/zmax)*(1:Nz-1)/2).^2]);
+ 
+    for x = 1:3
+        method = methods(x);
         
-        % % initial conditions
-        j01 = 2.40482555769577; % first root of bessel function
-        f0 = @(r, z) (besselj(0, (j01/(rmax-rmin))*r)) .* (sin((2*pi/(zmax-zmin))*z));
-        f_exact = @(r, z, t) (exp(-t*(((j01/(rmax-rmin))^2) + (2*pi/(zmax-zmin))^2))*f0(r, z));
-        f_exact = f_exact(Rmat, Zmat, tf);
-        
-        f = f0(Rmat, Zmat);
-
-        rhoM = sum(sum(f.*Rmat))*2*pi*dr*dz;
-        JzM  = sum(sum(f.*Rmat.*Zmat))*2*pi*dr*dz;
-        kappaM   = sum(sum(f.*Rmat.*((Rmat.^2 + Zmat.^2)/2)))*2*pi*dr*dz;
-        
-        % init bases
-        [Vr, S, Vz] = svd2(f, rvals);
-        r0 = min(r0, size(Vr, 2));
-        Vr = Vr(:, 1:r0); S = S(1:r0, 1:r0); Vz = Vz(:, 1:r0);
-        
-        % store rank, mass, momentum, energy, l1 decay, etc...
-        mass = zeros(Nt, 1);
-        Jzvals = zeros(Nt, 1);
-        E = zeros(Nt, 1);
-        min_vals = zeros(Nt, 1);
-        ranks = zeros(Nt, 1);
-        
-        mass(1) = 2*pi*dr*dz*sum(sum(Rmat .* f));
-        Jzvals(1) = 2*pi*dr*dz*sum(sum(f .* Rmat .* Zmat));
-        E(1) = 2*pi*dr*dz*sum(sum(f .* Rmat .* ((Rmat.^2 + Zmat.^2)/2)));
-        min_vals(1) = min(min(f));
-        ranks(1) = r0;
-        
-        % time-stepping loop
-        for n = 2:Nt
-            tval = tvals(n);
-            dt = tval - tvals(n-1);
-            switch(method)
-                case '1'
-                    [Vr, S, Vz, rank] = BackwardEulerTimestep(Vr, S, Vz, dt, rvals, zvals, Rmat, Zmat, Drr, Dzz, tolerance, rhoM);
-                case '2'
-                    [Vr, S, Vz, rank] = DIRK2Timestep(Vr, S, Vz, dt, rvals, zvals, Rmat, Zmat, Drr, Dzz, tolerance, rhoM);
-                case '3'
-                    [Vr, S, Vz, rank] = DIRK3Timestep(Vr, S, Vz, dt, rvals, zvals, Rmat, Zmat, Drr, Dzz, tolerance, rhoM);
-                case '4'
-                    [Vr, S, Vz, rank] = DIRK4Timestep(Vr, S, Vz, dt, rvals, zvals, Rmat, Zmat, Drr, Dzz, tolerance, rhoM);
+        for k = 1:numel(lambdavals)
+            dt = lambdavals(k)/((1/dr) + (1/dz));
+            disp(['Method: ', method, ', dt=', num2str(dt, 3), ', ', num2str(k), '/', num2str(numel(lambdavals))]);
+            tvals = (0:dt:tf)';
+            if tvals(end) ~= tf
+                tvals = [tvals; tf];
+            end
+            Nt = numel(tvals);
+            
+            % % initial conditions
+            j01 = 2.40482555769577; % first root of bessel function
+            f0 = @(r, z) (besselj(0, (j01/(rmax-rmin))*r)) .* (sin((2*pi/(zmax-zmin))*z));
+            f_exact = @(r, z, t) (exp(-t*(((j01/(rmax-rmin))^2) + (2*pi/(zmax-zmin))^2))*f0(r, z));
+            f_exact = f_exact(Rmat, Zmat, tf);
+            
+            f = f0(Rmat, Zmat);
+    
+            rhoM = sum(sum(f.*Rmat))*2*pi*dr*dz;
+            JzM  = sum(sum(f.*Rmat.*Zmat))*2*pi*dr*dz;
+            kappaM   = sum(sum(f.*Rmat.*((Rmat.^2 + Zmat.^2)/2)))*2*pi*dr*dz;
+            
+            % init bases
+            [Vr, S, Vz] = svd2(f, rvals);
+            r0 = min(r0, size(Vr, 2));
+            Vr = Vr(:, 1:r0); S = S(1:r0, 1:r0); Vz = Vz(:, 1:r0);
+            
+            % store rank, mass, momentum, energy, l1 decay, etc...
+            mass = zeros(Nt, 1);
+            Jzvals = zeros(Nt, 1);
+            E = zeros(Nt, 1);
+            min_vals = zeros(Nt, 1);
+            ranks = zeros(Nt, 1);
+            
+            mass(1) = 2*pi*dr*dz*sum(sum(Rmat .* f));
+            Jzvals(1) = 2*pi*dr*dz*sum(sum(f .* Rmat .* Zmat));
+            E(1) = 2*pi*dr*dz*sum(sum(f .* Rmat .* ((Rmat.^2 + Zmat.^2)/2)));
+            min_vals(1) = min(min(f));
+            ranks(1) = r0;
+            
+            % time-stepping loop
+            for n = 2:Nt
+                tval = tvals(n);
+                dt = tval - tvals(n-1);
+                switch(method)
+                    case '1'
+                        [Vr, S, Vz, rank] = BackwardEulerTimestep(Vr, S, Vz, dt, rvals, zvals, Rmat, Zmat, Drr, Dzz, tolerance, rhoM);
+                    case '2'
+                        [Vr, S, Vz, rank] = DIRK2Timestep(Vr, S, Vz, dt, rvals, zvals, Rmat, Zmat, Drr, Dzz, tolerance, rhoM);
+                    case '3'
+                        [Vr, S, Vz, rank] = DIRK3Timestep(Vr, S, Vz, dt, rvals, zvals, Rmat, Zmat, Drr, Dzz, tolerance, rhoM);
+                    case '4'
+                        [Vr, S, Vz, rank] = DIRK4Timestep(Vr, S, Vz, dt, rvals, zvals, Rmat, Zmat, Drr, Dzz, tolerance, rhoM);
+                end
+                
+                f = Vr*S*Vz';
+                mass(n) = 2*pi*dr*dz*sum(sum(Rmat .* f));    
+                Jzvals(n) = 2*pi*dr*dz*sum(sum(f .* Rmat .* Zmat));
+                E(n) = pi*dr*dz*sum(sum(f .* (Rmat.^2 + Zmat.^2) .* Rmat));
+                min_vals(n) = min(min(f));
+                ranks(n) = rank;
             end
             
-            f = Vr*S*Vz';
-            mass(n) = 2*pi*dr*dz*sum(sum(Rmat .* f));    
-            Jzvals(n) = 2*pi*dr*dz*sum(sum(f .* Rmat .* Zmat));
-            E(n) = pi*dr*dz*sum(sum(f .* (Rmat.^2 + Zmat.^2) .* Rmat));
-            min_vals(n) = min(min(f));
-            ranks(n) = rank;
+            errors(k, x, spatial_accuracy_test_idx) = 2*pi*dr*dz*sum((sum(Rmat .* abs(f - f_exact)))); % L1 error
         end
-        
-        errors(k, x) = 2*pi*dr*dz*sum((sum(Rmat .* abs(f - f_exact)))); % L1 error
     end
 end
 
-%% ----- Final Solution ----- %%
+%%
+% 1. Final solution
 figure(1); clf; surf(Rmat, Zmat, f);
 colorbar; shading interp;
 legend(sprintf('N_r = %s', num2str(Nr, 3)), 'Location','northwest');
 xlabel('V_r'); ylabel('V_z'); zlabel('U'); title([sprintf('Backward Euler approximation of 0D2V Fokker-Planck system at time %s', num2str(tf, 4))]);
 
+% 2. Exact solution
 figure(2); clf; surf(Rmat, Zmat, f_exact);
 colorbar; shading interp;
 xlabel('V_r'); ylabel('V_z'); zlabel('f(V_r, V_z, t)'); title([sprintf('f_{exact} at time t=%s', num2str(tf, 4))]);
 
-%% ----- Temporal Error Plot ----- %%
-figure(3); clf; cutoff = 0.2;
-loglog(lambdavals, errors(:, 1), 'black-', 'LineWidth', 1.5); hold on; % B. Euler
-loglog(lambdavals, errors(:, 2), 'blue-', 'LineWidth', 1.5); % DIRK2
-loglog(lambdavals, errors(:, 3), 'green-', 'LineWidth', 1.5); % DIRK3
-loglog(lambdavals, errors(:, 4), 'm-', 'LineWidth', 1.5); % DIRK3
-loglog(lambdavals(ceil(cutoff*end):end), 0.008*lambdavals(ceil(cutoff*end):end), 'black--', 'LineWidth', 1); % Order 1
-loglog(lambdavals(ceil(cutoff*end):end), 0.00035*lambdavals(ceil(cutoff*end):end).^2, 'blue--', 'LineWidth', 1); % Order 2
-loglog(lambdavals(ceil(cutoff*end):end), 0.000018*lambdavals(ceil(cutoff*end):end).^3, 'green--', 'LineWidth', 1); % Order 3
-loglog(lambdavals(ceil(cutoff*end):end), 0.000009*lambdavals(ceil(cutoff*end):end).^4, 'm--', 'LineWidth', 1); % Order 4
+%% 3. Temporal error plot
+dtvals = lambdavals./((1/dr) + (1/dz));
+figure(3); clf; 
+begin_cutoff_1 = ceil(0.05*numel(dtvals)); end_cutoff_1 = ceil(0.4*numel(dtvals));
+begin_cutoff_2 = ceil(0.2*numel(dtvals)); end_cutoff_2 = ceil(0.7*numel(dtvals));
+begin_cutoff_3 = ceil(0.4*numel(dtvals)); end_cutoff_3 = ceil(1*numel(dtvals));
+
+% Nr=40, Nz=80
+loglog(dtvals, errors(:, 1, 1), 'black-', 'LineWidth', 1.5); hold on; % B. Euler
+loglog(dtvals, errors(:, 2, 1), 'blue-', 'LineWidth', 1.5); % DIRK2
+loglog(dtvals, errors(:, 3, 1), 'green-', 'LineWidth', 1.5); % DIRK3
+
+% Nr=80, Nz=160
+loglog(dtvals, errors(:, 1, 2), 'black-', 'LineWidth', 1.5); hold on; % B. Euler
+loglog(dtvals, errors(:, 2, 2), 'blue-', 'LineWidth', 1.5); % DIRK2
+loglog(dtvals, errors(:, 3, 2), 'green-', 'LineWidth', 1.5); % DIRK3
+
+% loglog(dtvals, errors(:, 4), 'm-', 'LineWidth', 1.5); % DIRK4
+% loglog(dtvals(begin_cutoff_1:end_cutoff_1), 0.000002*dtvals(begin_cutoff_1:end_cutoff_1), 'black--', 'LineWidth', 1); % Order 1
+loglog(dtvals(begin_cutoff_1:end_cutoff_1), 0.8*dtvals(begin_cutoff_1:end_cutoff_1), 'black--', 'LineWidth', 1); % Order 1
+% loglog(dtvals(begin_cutoff_2:end_cutoff_2), 0.00000015*dtvals(begin_cutoff_2:end_cutoff_2).^2, 'blue--', 'LineWidth', 1); % Order 2
+loglog(dtvals(begin_cutoff_2:end_cutoff_2), 4*dtvals(begin_cutoff_2:end_cutoff_2).^2, 'blue--', 'LineWidth', 1); % Order 2
+% loglog(dtvals(begin_cutoff_3:end_cutoff_3), 0.000000008*dtvals(begin_cutoff_3:end_cutoff_3).^3, 'green--', 'LineWidth', 1); % Order 3
+loglog(dtvals(begin_cutoff_3:end_cutoff_3), 24*dtvals(begin_cutoff_3:end_cutoff_3).^3, 'green--', 'LineWidth', 1); % Order 3
+% loglog(dtvals(ceil(cutoff*end):end), 0.000009*dtvals(ceil(cutoff*end):end).^4, 'm--', 'LineWidth', 1); % Order 4
 % title(sprintf('RAIL Temporal Convergence at tf=%s, Nr = %s, Nz = %s', num2str(tf), num2str(Nr), num2str(Nz))); 
-xlabel('\lambda'); ylabel('L^1 Error');
-legend('Backward Euler', 'DIRK2', 'DIRK3', 'DIRK4', 'Order 1', 'Order 2', 'Order 3', 'Order 4', 'location','eastoutside');
-% axis([lambdavals(1),lambdavals(end),1.0e-6,1.0e1]);
+xlabel('\Deltat'); ylabel('L_1 Error');
+legend('Backward Euler', 'DIRK2', 'DIRK3', '', '', '', 'Order 1', 'Order 2', 'Order 3', 'location','northwest');
 fontsize(18,"points");
 set(gcf,'Units','pixels','Position',[100 100 800 500])
-% exportgraphics(gcf,'./Plots/heat_eqn_temporal_error.pdf','ContentType','vector');
+saveas(gcf, './Plots/heat_eqn_temporal_error_single_spatial.fig');
+exportgraphics(gcf,'./Plots/heat_eqn_temporal_error.pdf','ContentType','vector');
 
-% Mass
+%% 4. Mass conservation
 figure(4); clf; 
 plot(tvals(2:end), abs(mass(2:end)-mass(1))/mass(1), 'LineWidth', 1.5);
 xlabel('t'); ylabel('Relative mass'); title('Relative mass of numerical solution');
@@ -152,21 +177,9 @@ xlabel('t'); ylabel('Relative mass'); title('Relative mass of numerical solution
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%% ---- HELPER FUNCTIONS ---- %%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 function [Vr, S, Vz, rank] = BackwardEulerTimestep(Vr0, S0, Vz0, dt, rvals, zvals, Rmat, Zmat, Drr, Dzz, tolerance, rhoM)
 
