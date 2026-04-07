@@ -1,7 +1,7 @@
 clc; close all; clear variables;
 
 % load reference solution 
-soln = load("vdfp_refsoln_v2_Nx160_Nvperp200_Nvpara720_T1_tole-8_dt2e-1-imex222.mat"); % Nx=160, Nv=200, Nz=720, dt=0.2, Tf=1, tol=1e-8
+soln = load("vdfp_refsoln_v2_Nx160_Nvperp720_Nvpara200_T1_tole-8_dt2e-1-imex222.mat"); % Nx=160, Nv=200, Nz=720, dt=0.2, Tf=1, tol=1e-8
 soln = soln.f_vals_low_rank;
 Nv_ref = 720; % size of reference solution grid (in the velocity dimension we are testing)
 Nv_default = 200;
@@ -11,8 +11,9 @@ Nv_default = 200;
 % reference Nr_ref value is Nv_ref and the Nz_ref is Nv_default (or equal to the Nz
 % values you are using for the numerical simulation. If you are testing
 % accuracy in V_parallel, use Nz_ref = Nv_ref, Nr_ref = Nv_default.
-% Nr_ref = Nv_ref; Nz_ref = Nv_default;
-Nr_ref = Nv_default; Nz_ref = Nv_ref;
+
+Nr_ref = Nv_ref; Nz_ref = Nv_default; % for testing perp (radial) accuracy
+% Nr_ref = Nv_default; Nz_ref = Nv_ref; % for testing parallel (axial) accuracy
 
 
 Nx = 160;
@@ -39,10 +40,10 @@ for nvIndex = 1:numel(Nvvals)
     % NOTE: if testing accuracy in perp (radial) direction, set Nr =
     % Nvvals(nvIndex) and Nz = Nv_default. If testing in parallel (axial)
     % direction, set Nz = Nvvals(nvIndex), Nr = Nv_default
-    % Nz = Nv_default;
-    % Nr = Nvvals(nvIndex);
-    Nr = Nv_default;
-    Nz = Nvvals(nvIndex);
+    Nz = Nv_default;
+    Nr = Nvvals(nvIndex);
+    % Nr = Nv_default;
+    % Nz = Nvvals(nvIndex);
     x_min = 0;
     x_max = 200;
     Vr_max = 8; Vr_min = 0;
@@ -325,8 +326,7 @@ for nvIndex = 1:numel(Nvvals)
                     f_vals_S{spatialIndex} = S2;
                     f_vals_Vz{spatialIndex} = Vz2;
     
-                    % use moments from actual soln rather than from pesky fluid
-                    % solver
+                    % use moments from actual solution
                     f = Vr2*S2*Vz2';
                     spatial_rank_vals(spatialIndex, 1) = rank;
                     spatial_min_vals(spatialIndex, 1) = min(min(f));
@@ -392,8 +392,8 @@ for nvIndex = 1:numel(Nvvals)
     
     % this ensures indexing is correct when comparing the reference and
     % numerical solutions
-    % N_comparison = Nr; % for testing radial accuracy
-    N_comparison = Nz; % for testing axial accuracy
+    N_comparison = Nr; % for testing radial accuracy
+    % N_comparison = Nz; % for testing axial accuracy
     offset_start_idx = ceil(Nv_ref/(2*N_comparison));
     offset_end_idx = floor(Nv_ref/(2*N_comparison));
     offset_increment = Nv_ref/N_comparison;
@@ -408,8 +408,8 @@ for nvIndex = 1:numel(Nvvals)
         soln_Ta(i) = (2*pi*dr_ref*dz_ref*sum(sum((Rmat_ref.^2 + Zmat_ref.^2).*f_exact.*Rmat_ref)) - soln_n(i)*soln_u(i)^2)/(3*soln_n(i)/ma);
     
         % restrictive indexing to match spatial nodes
-        % f_exact = f_exact(offset_start_idx:offset_increment:end-offset_end_idx, :); % for testing radial accuracy
-        f_exact = f_exact(:, offset_start_idx:offset_increment:end-offset_end_idx); % for testing axial accuracy
+        f_exact = f_exact(offset_start_idx:offset_increment:end-offset_end_idx, :); % for testing radial accuracy
+        % f_exact = f_exact(:, offset_start_idx:offset_increment:end-offset_end_idx); % for testing axial accuracy
         error(i) = 2*pi*dr*dz*sum(sum(abs(f - f_exact) .* Rmat));
         linf_error = max(linf_error, max(max(abs(f - f_exact))));
     
