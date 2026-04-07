@@ -136,44 +136,50 @@ c_gray   = [0.4980 0.4980 0.4980];
 
 % Temporal accuracy
 cutoff = 0.2;
+dtvals = lambdavals./((1/dr) + (1/dz));
 figure(1); clf;
-loglog(lambdavals, errors(:, 1), '-', 'Color', c_blue, 'LineWidth', 1.5); hold on;
-loglog(lambdavals(ceil(cutoff*end):end), 9e-3*(lambdavals(ceil(cutoff*end):end) .^ 1), '--', 'Color', c_blue, 'LineWidth', 1.5);
-loglog(lambdavals, errors(:, 2), '-', 'Color', c_orange, 'LineWidth', 1.5); hold on;
-loglog(lambdavals(ceil(cutoff*end):end), 2e-4*(lambdavals(ceil(cutoff*end):end) .^ 2), '--', 'Color', c_orange, 'LineWidth', 1.5);
-loglog(lambdavals, errors(:, 3), '-', 'Color', c_green,  'LineWidth', 1.5); hold on;
-loglog(lambdavals(ceil(cutoff*end):end), 2.5e-5*(lambdavals(ceil(cutoff*end):end) .^ 3), '--', 'Color', c_green, 'LineWidth', 1.5);
-xlabel('\lambda'); ylabel('L_1 error'); % title('Error plot');
-legend('Backward Euler', 'Order 1', 'DIRK2','Order 2', 'DIRK3', 'Order 3', 'Location', 'eastoutside');
+loglog(dtvals, errors(:, 1), '-', 'Color', c_blue, 'LineWidth', 1.5); hold on;
+loglog(dtvals, errors(:, 2), '-', 'Color', c_orange, 'LineWidth', 1.5); hold on;
+loglog(dtvals, errors(:, 3), '-', 'Color', c_green,  'LineWidth', 1.5); hold on;
+loglog(dtvals(ceil(cutoff*end):end), 0.08*(dtvals(ceil(cutoff*end):end) .^ 1), '--', 'Color', c_blue, 'LineWidth', 1.5);
+loglog(dtvals(ceil(cutoff*end):end), 2e-2*(dtvals(ceil(cutoff*end):end) .^ 2), '--', 'Color', c_orange, 'LineWidth', 1.5);
+loglog(dtvals(ceil(cutoff*end):end), 2.2e-2*(dtvals(ceil(cutoff*end):end) .^ 3), '--', 'Color', c_green, 'LineWidth', 1.5);
+xlabel('\Deltat'); ylabel('L_1 error'); % title('Error plot');
+xlim([dtvals(1), dtvals(end)])
+legend('Backward Euler', 'DIRK2', 'DIRK3', 'Order 1', 'Order 2', 'Order 3', 'Location', 'southwest');
 fontsize(18,"points");
 set(gcf,'Units','pixels','Position', [100 100 800 500]);
+% saveas(gcf, './Plots/DFP_temporal_error_plot.fig');
 % exportgraphics(gcf,'./Plots/DFP_temporal_error_plot.pdf','ContentType','vector')
 
-% Numerical solution
+%% Numerical solution
 figure(2); clf; surf(Rmat, Zmat, f);
 colorbar; shading interp;
-xlabel('V_r'); ylabel('V_z'); zlabel('f'); % title([sprintf('DIRK3 numerical solution at time %s', num2str(tf, 4))]);
+xlabel('V_{\perp}'); ylabel('V_{||}'); zlabel('f'); % title([sprintf('DIRK3 numerical solution at time %s', num2str(tf, 4))]);
 fontsize(18,"points");
 set(gcf,'Units','pixels','Position', [100 100 800 500]);
+saveas(gcf, './Plots/DFP_numerical_solution.fig');
 exportgraphics(gcf,'./Plots/DFP_numerical_solution.pdf','ContentType','vector')
 
 % Exact solution
 figure(3); clf; surf(Rmat, Zmat, f_exact);
 colorbar; shading interp;
-xlabel('V_r'); ylabel('V_z'); zlabel('f_{exact}'); % title([sprintf('f_{exact} at time t=%s', num2str(tf, 4))]);
+xlabel('V_{\perp}'); ylabel('V_{||}'); zlabel('f_{exact}'); % title([sprintf('f_{exact} at time t=%s', num2str(tf, 4))]);
 fontsize(18,"points");
 set(gcf,'Units','pixels','Position', [100 100 800 500]);
+saveas(gcf, './Plots/DFP_exact_solution.fig');
 exportgraphics(gcf,'./Plots/DFP_exact_solution.pdf','ContentType','vector')
 
-%% L1 decay
+% L1 decay
 figure(4); clf; 
 semilogy(tvals, l1(:, 1), 'LineWidth', 1.5);hold on;
 semilogy(tvals, l1(:, 2), 'LineWidth', 1.5);
 semilogy(tvals, l1(:, 3), 'LineWidth', 1.5);
-xlabel('t'); ylabel('|| f - f_{inf} ||_1'); % title('L_1 drive to equilibrium solution');
-legend('Backward Euler', 'DIRK2', 'DIRK3', 'Location', 'eastoutside');
+xlabel('time'); ylabel('|| f - f_{inf} ||_1'); % title('L_1 drive to equilibrium solution');
+legend('Backward Euler', 'DIRK2', 'DIRK3', 'Location', 'northeast');
 fontsize(18,"points");
 set(gcf,'Units','pixels','Position', [100 100 800 500]);
+saveas(gcf, './Plots/DFP_l1_decay.fig');
 exportgraphics(gcf,'./Plots/DFP_L1_decay.pdf','ContentType','vector')
 
 % Relative entropy
@@ -181,31 +187,32 @@ figure(5); clf;
 semilogy(tvals, relative_entropy(:, 1), 'LineWidth', 1.5); hold on;
 semilogy(tvals, relative_entropy(:, 2), 'LineWidth', 1.5);
 semilogy(tvals, relative_entropy(:, 3), 'LineWidth', 1.5);
-xlabel('t'); ylabel('Relative entropy decay'); % title('Relative entropy decay');
-legend('Backward Euler', 'DIRK2', 'DIRK3', 'Location', 'eastoutside');
+xlabel('time'); ylabel('Relative entropy decay'); % title('Relative entropy decay');
+legend('Backward Euler', 'DIRK2', 'DIRK3', 'Location', 'northeast');
 fontsize(18,"points");
 set(gcf,'Units','pixels','Position', [100 100 800 500]);
+saveas(gcf, './Plots/DFP_relative_entropy.fig');
 exportgraphics(gcf,'./Plots/DFP_relative_entropy.pdf','ContentType','vector')
 
-%%
 % Positivity
 figure(6); clf; plot(tvals, min_vals, 'LineWidth', 1.5);
-xlabel('t'); ylabel('Minimum value'); % title('Minimum values of numerical solution');
-legend('Backward Euler', 'DIRK2', 'DIRK3', 'Location', 'eastoutside');
+xlabel('time'); ylabel('Minimum value'); % title('Minimum values of numerical solution');
+legend('Backward Euler', 'DIRK2', 'DIRK3', 'Location', 'southeast');
 fontsize(18,"points");
 set(gcf,'Units','pixels','Position', [100 100 800 500]);
+saveas(gcf, './Plots/DFP_min_vals.fig');
 exportgraphics(gcf,'./Plots/DFP_min_vals.pdf','ContentType','vector')
 
-
-% Mass
+% Structure conservation
 figure(7); clf; hold on;
 plot(tvals(2:end), abs(mass(2:end)-mass(1))/mass(1), 'LineWidth', 1.5);
 figure(7); plot(tvals(2:end), abs(Jzvals(2:end)-Jzvals(1)), 'LineWidth', 1.5);
 figure(7);  plot(tvals(2:end), abs(E(2:end)-E(1))/E(1), 'LineWidth', 1.5);
-xlabel('t'); ylabel('Variation'); % title('Mass, momentum, and energy conservation');
-legend('Relative mass deviation', 'Absolute momentum deviation', 'Relative energy deviation', 'Location', 'eastoutside');
+xlabel('time'); ylabel('Variation'); % title('Mass, momentum, and energy conservation');
+legend('Relative mass deviation', 'Absolute momentum deviation', 'Relative energy deviation', 'Location', 'northeast');
 fontsize(18,"points");
 set(gcf,'Units','pixels','Position', [100 100 800 500]);
+saveas(gcf, './Plots/DFP_structure_conservation.fig');
 exportgraphics(gcf,'./Plots/DFP_structure_conservation.pdf','ContentType','vector')
 
 % Rank plot
@@ -213,15 +220,15 @@ figure(8); clf; hold on;
 plot(tvals, ranks(:, 1), 'LineWidth', 1.5); hold on;
 plot(tvals, ranks(:, 2), 'LineWidth', 1.5);
 plot(tvals, ranks(:, 3), 'LineWidth', 1.5);
-xlabel('t'); ylabel('Rank'); % title('Rank plot');
-legend('Backward Euler', 'DIRK2', 'DIRK3', 'Location', 'eastoutside');
+xlabel('time'); ylabel('Rank'); % title('Rank plot');
+legend('Backward Euler', 'DIRK2', 'DIRK3', 'Location', 'northeast');
 fontsize(18,"points");
 set(gcf,'Units','pixels','Position', [100 100 800 500]);
+saveas(gcf, './Plots/DFP_rank_plot.fig');
 exportgraphics(gcf,'./Plots/DFP_rank_plot.pdf','ContentType','vector')
 
 
-%% ---- SPATIAL ACCURACY ---- %%
-
+% Spatial error table
 disp('Errors:');
 disp('Backward Euler');
 disp(errors(:, 1));
@@ -236,9 +243,9 @@ disp(log2(errors(1:end-1, 3)./errors(2:end, 3)));
 
 
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% ---- HELPER FUNCTIONS ---- %%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%% ---- HELPER FUNCTIONS ---- %%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 function [Flux] = GetFlux(A, B, C, u, xvals, t, dx)
     N = numel(xvals);
