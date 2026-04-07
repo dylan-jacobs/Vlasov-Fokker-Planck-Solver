@@ -21,7 +21,7 @@ Nt = numel(tvals);
 for nvIndex = 1:numel(Nvvals)
 
 % initial rank
-r0 = 30;
+r0 = 10;
 % time-stepping method: 1=B.Euler, 2=DIRK2
 method = '2';
 tolerance = 1e-8;
@@ -371,8 +371,8 @@ end
 
 
 % % save ref soln if running it
-save('vdfp_refsoln_v2_Nx160_Nvperp720_Nvpara200_T1_tole-8_dt2e-1-imex222.mat','f_vals_low_rank');
-return
+% save('vdfp_refsoln_v2_Nx160_Nvperp720_Nvpara200_T1_tole-8_dt2e-1-imex222.mat','f_vals_low_rank');
+% return
 
 % Compute errors
 error = zeros(Nx, 1);
@@ -408,15 +408,18 @@ ERRORS(5, nvIndex) = linf_error;
 end
 
 
-%%
 
-[~, Rmat_ref, Zmat_ref, dx_ref, dr_ref, dz_ref] = GetRZ(Nx, 200, 720, interval);
+% Get reference meshes for error calculation
+% Need to ensure that if you are testing V_perp (radial) accuracy, the
+% reference 
+Nr_ref = 720; Nz_ref = 200;
+[~, Rmat_ref, Zmat_ref, dx_ref, dr_ref, dz_ref] = GetRZ(Nx, Nr_ref, 200, interval);
 zvals_ref = Zmat_ref(1, :)';
 [Xmat_ref, Zmat_ref2] = meshgrid(xvals, zvals_ref); Xmat_ref=Xmat_ref'; Zmat_ref2=Zmat_ref2'; % for plotting only
 
-PlotF(soln, Xmat_ref, Rmat_ref, Zmat_ref2, dr_ref, 720, 11);
-title(sprintf('Exact solution at time t=%s', num2str(tf)));
 
+PlotF(soln, Xmat_ref, Rmat_ref, Zmat_ref2, dr_ref, 200, 11);
+title(sprintf('Exact solution at time t=%s', num2str(tf)));
 
 PlotF(f_vals_low_rank, Xmat, Rmat, Zmat2, dr, Nz, 10);
 title(sprintf('Numerical solution at time t=%s', num2str(tf)));
@@ -438,145 +441,15 @@ disp('Energy');
 disp(ERRORS(4, :)');
 disp(log2(ERRORS(4, 1:end-1)./ERRORS(4, 2:end))' ./ log2(Nvvals(2:end) ./ Nvvals(1:end-1))');
 
-return;
-%% Error plot
-% c_blue   = [0.1216 0.4667 0.7059];
-% c_orange = [1.0000 0.4980 0.0549];
-% c_green  = [0.1725 0.6275 0.1725];
-% c_red    = [0.8392 0.1529 0.1569];
-% c_purple = [0.5804 0.4039 0.7412];
-% c_brown  = [0.5490 0.3373 0.2941];
-% c_pink   = [0.8902 0.4667 0.7608];
-% c_gray   = [0.4980 0.4980 0.4980];
-% 
-% figure; clf;
-% loglog(NzVals, ERRORS2(1, :), '-', 'Color', c_blue, 'LineWidth', 1.5); hold on; % L1
-% % loglog(NzVals, ERRORS(5, :), '-', 'Color', c_purple,  'LineWidth', 1.5); hold on; % Linf
-% % loglog(NzVals, 9e-3*(NzVals .^ 1), '--', 'Color', c_blue, 'LineWidth', 1.5); 
-% loglog(NzVals, ERRORS2(2, :), '-', 'Color', c_orange, 'LineWidth', 1.5); hold on; % nvals
-% loglog(NzVals, ERRORS2(3, :), '-', 'Color', c_green,  'LineWidth', 1.5); hold on; % uvals
-% loglog(NzVals, ERRORS2(4, :), '-', 'Color', c_red,  'LineWidth', 1.5); hold on; % Tvals
-% loglog(NzVals, 2e-4*(NzVals .^ 2), '--', 'Color', c_gray, 'LineWidth', 1.5);
-% 
-% % loglog(NzVals, 2.5e-5*(NzVals .^ 3), '--', 'Color', c_green, 'LineWidth', 1.5);
-% xlabel('dt'); ylabel('L_1 error'); title('Velocity error plot');
-% legend('L_1', 'L_1 (n)', 'L_1 (u)', 'L_1 (T_a)', 'Order 2'); 
-
-
-%%
-
-figure(1); clf;
-plot(xvals, n_vals, "LineWidth", 1.5); hold on;
-plot(xvals, u_para./u_para(1), "LineWidth",1.5);
-plot(xvals, Te_vals, "LineWidth", 1.5);
-plot(xvals, Ta_vals, "LineWidth", 1.5);
-legend('n', 'nu_{||}', 'T_e', 'T_a');
-title(sprintf('Mass, momentum, ion temperature, and electron temperature at t=%s', num2str(tval)));
-ylim([0, 1.2]);
-pause(0.05);
-
-figure(4); clf; plot(tvals, abs(mass-mass(1))/mass(1), 'k-', 'LineWidth', 1.5);
-xlabel('t'); ylabel('Relative error (mass)'); title('Relative mass of numerical solution over time');
-
-figure(5); clf; plot(tvals, abs(momentum-momentum(1)), 'k-', 'LineWidth', 1.5);
-xlabel('t'); ylabel('Absolute error (Uz)'); title('Absolute error of bulk velocity over time');
-
-figure(6); clf; plot(tvals, abs(energy-energy(1))/energy(1), 'k-', 'LineWidth', 1.5);
-xlabel('t'); ylabel('Relative error (Energy)'); title('Relative energy of numerical solution over time');
-
-%% Errors
-disp('Errors:');
-disp('L1 (global)');
-disp(ERRORS(1, :)');
-disp(log2(ERRORS(1, 1:end-1)./ERRORS(1, 2:end))');
-disp('L_{inf} (global)');
-disp(ERRORS(5, :)');
-disp(log2(ERRORS(5, 1:end-1)./ERRORS(5, 2:end))');
-disp('Mass');
-disp(ERRORS(2, :)');
-disp(log2(ERRORS(2, 1:end-1)./ERRORS(2, 2:end))');
-disp('Momentum');
-disp(ERRORS(3, :)');
-disp(log2(ERRORS(3, 1:end-1)./ERRORS(3, 2:end))');
-disp('Energy');
-disp(ERRORS(4, :)');
-disp(log2(ERRORS(4, 1:end-1)./ERRORS(4, 2:end))');
-
-
-
-% for j = 1:Nx
-%     fprintf('L1 (local, i=%d)\n', j);
-%     disp(ERRORS(6 + j, :)');
-%     disp(log2(ERRORS(6 + j, 1:end-1)./ERRORS(6 + j, 2:end))');
-% end
-
-
-% figure(1); clf; surf(Rmat, Zmat, f);
-% colorbar; shading interp;
-% legend(sprintf('N_r = %s', num2str(Nr, 3)), 'Location','northwest');
-% xlabel('V_r'); ylabel('V_z'); zlabel('U'); title([sprintf('Backward Euler approximation of 0D2V Fokker-Planck system at time %s', num2str(tf, 4))]);
-% 
-% figure(2); clf; surf(Rmat, Zmat, f_inf);
-% colorbar; shading interp;
-% xlabel('V_r'); ylabel('V_z'); zlabel('f(V_r, V_z, t)'); title([sprintf('f_{exact} at time t=%s', num2str(tf, 4))]);
-% 
-% l1 decay
-% figure(3); clf; semilogy(tvals, l1, 'black-', 'LineWidth', 1.5);
-% xlabel('t'); ylabel('L_1(f(V_r, V_z))'); title('L_1 decay of numerical solution over time');
-
-% Temporal errors!
-return
-%%
-% Mass
-figure(4); clf; hold on;
-
-plot(tvals, abs(mass-mass(1))/mass(1), 'b-', 'LineWidth', 1.5);
-xlabel('t'); 
-
-plot(tvals, abs(momentum-momentum(1))/momentum(1), 'k-', 'LineWidth', 1.5);
-xlabel('t'); 
-
-plot(tvals, abs(energy-energy(1))/energy(1), 'g-', 'LineWidth', 1.5);
-xlabel('t');
-
-legend('Mass deviation', 'Momentum deviation', 'Energy deviation');
-title('Mass, momentum, and energy conservation');
-ylabel('Deviation');
-
-% Rank plot
-figure(7); clf;
-plot(tvals, avg_ranks_total(:, 1), 'black-', 'LineWidth', 1.5); hold on;
-plot(tvals, avg_ranks_total(:, 2), 'blue-', 'LineWidth', 1.5);
-% plot(ranks3(:, 1), ranks3(:, 2), 'green-', 'LineWidth', 1.5);
-xlabel('time'); ylabel('rank'); title('Average rank plot');
-legend('Backward Euler', 'IMEX222');
-return;
-
-%%
-% Positivity
-figure(4); clf; plot(tvals, min_vals, 'green-', 'LineWidth', 1.5);
-xlabel('t'); ylabel('min(f(V_r, V_z))'); title('Minimum values of numerical solution over time');
-
-% Electric field
-figure; clf;
-semilogy(tvals, Efield, 'LineWidth', 1.5);
-xlabel('t'); ylabel('E_2'); title('L_2 norm of Electric Field over Time');
-
-% Moments
-figure(3); clf;
-plot(xvals, n_vals, "LineWidth", 1.5); hold on;
-plot(xvals, u_para./u_para(1), "LineWidth",1.5);
-plot(xvals, Te_vals, "LineWidth", 1.5);
-plot(xvals, Ta_vals, "LineWidth", 1.5);
-legend('n', 'u_{||}', 'T_e', 'T_a');
-title(sprintf('Mass, momentum, ion temperature, and electron temperature at t=%s', num2str(tval)));
-ylim([0, 1.2]);
-% saveas(gcf, sprintf('Moments-Plots/moments_time_%s.m', num2str(round(tval))));
 
 
 
 
-%%%%%% FUNCTIONS %%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%% ---- HELPER FUNCTIONS ---- %%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 function [Dx] = GetVlasov(dt, dx, Zmat, f_vals_low_rank, leftBC, rightBC, i)
     f_i = f_vals_low_rank{i, 1}*f_vals_low_rank{i, 2}*f_vals_low_rank{i, 3}';
     if i == 1
