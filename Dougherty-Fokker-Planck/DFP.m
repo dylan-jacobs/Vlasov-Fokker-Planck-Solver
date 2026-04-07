@@ -18,6 +18,9 @@ tf = 25;
 rvals = Rmat(:, 1);
 zvals = Zmat(1, :)';
 
+% initial rank
+r0 = 10;
+
 % initial conditions
 f_M = @(vr,vz,n,ur,uz,T,R) (n/(2*pi*R*T)^(3/2)).*exp(-(vr.^2+(vz-uz).^2)./(2*R*T)); %assumes ur=0!!!
 
@@ -81,7 +84,7 @@ for k = 1:numel(lambdavals)
         
         % init bases
         [Vr, S, Vz] = svd2(f, rvals);
-        r0 = min(10, size(Vr, 2)); % initial rank r0
+        r0 = min(r0, size(Vr, 2)); % initial rank r0
         Vr = Vr(:, 1:r0); S = S(1:r0, 1:r0); Vz = Vz(:, 1:r0);
         
         l1(1, x) = 2*pi*dr*dz*sum(sum(abs(Rmat .* (f - f_inf))));
