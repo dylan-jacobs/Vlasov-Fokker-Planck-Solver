@@ -15,7 +15,6 @@ Nv_default = 200;
 Nr_ref = Nv_ref; Nz_ref = Nv_default; % for testing perp (radial) accuracy
 % Nr_ref = Nv_default; Nz_ref = Nv_ref; % for testing parallel (axial) accuracy
 
-
 Nx = 160;
 Nvvals = [48, 80, 144, 240]; % chose these because these are odd factors of Nv_ref=720 (we need the cell centers to align)
 % Nvvals = Nv_ref; % if computing reference solution
