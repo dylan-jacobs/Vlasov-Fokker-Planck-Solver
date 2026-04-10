@@ -11,7 +11,7 @@ r0 = 10;
 methods = ['1', '2', '3', '4'];
 tolerance = 1e-6;
 
-lambdavals = (0.02:0.02:10)'; % lambdavals = 0.1;
+lambdavals = (1:1:100)'; % lambdavals = 0.1;
 errors = zeros(numel(lambdavals), 4, 2);
 
 Nrvals = [40, 80];
@@ -30,15 +30,18 @@ for spatial_accuracy_test_idx = 1:1
     zvals = Zmat(1, :)';
     
     % final time
-    tf = 0.1;
+    tf = 1;
+
+    % thermal conductivity coefficient
+    alpha = 0.1;
     
     Drr = gallery('tridiag', Nr, rvals(1:end-1)+(dr/2), -2*rvals, rvals(1:end-1)+(dr/2));
     Drr(1, 1) = -(rvals(1) + (dr/2));
     Drr(end, end-1) = ((1/3) * (rvals(end) + (dr/2))) + (rvals(end) - (dr/2));
     Drr(end, end) =  ((-3) * (rvals(end) + (dr/2))) - (rvals(end) - (dr/2));
-    Drr = (1/(dr^2)) * (diag(1./rvals) * Drr);
+    Drr = alpha*((1/(dr^2)) * (diag(1./rvals) * Drr));
     
-    Dzz = (1/dz^2)*gallery('tridiag', Nz, 1, -2, 1); % centered nodes
+    Dzz = alpha*((1/dz^2)*gallery('tridiag', Nz, 1, -2, 1)); % centered nodes
     
     % Dzz = (2*pi/zmax)^2*toeplitz([-1/(3*(2*dz/zmax)^2)-1/6 ...
     % .5*(-1).^(2:Nz)./sin((2*pi*dz/zmax)*(1:Nz-1)/2).^2]);
@@ -58,7 +61,7 @@ for spatial_accuracy_test_idx = 1:1
             % % initial conditions
             j01 = 2.40482555769577; % first root of bessel function
             f0 = @(r, z) (besselj(0, (j01/(rmax-rmin))*r)) .* (sin((2*pi/(zmax-zmin))*z));
-            f_exact = @(r, z, t) (exp(-t*(((j01/(rmax-rmin))^2) + (2*pi/(zmax-zmin))^2))*f0(r, z));
+            f_exact = @(r, z, t) (exp(-(alpha^1)*t*(((j01/(rmax-rmin))^2) + (2*pi/(zmax-zmin))^2))*f0(r, z));
             f_exact = f_exact(Rmat, Zmat, tf);
             
             f = f0(Rmat, Zmat);
@@ -128,9 +131,9 @@ xlabel('V_r'); ylabel('V_z'); zlabel('f(V_r, V_z, t)'); title([sprintf('f_{exact
 %% 3. Temporal error plot
 dtvals = lambdavals./((1/dr) + (1/dz));
 figure(3); clf; 
-begin_cutoff_1 = ceil(0.05*numel(dtvals)); end_cutoff_1 = ceil(0.4*numel(dtvals));
-begin_cutoff_2 = ceil(0.2*numel(dtvals)); end_cutoff_2 = ceil(0.7*numel(dtvals));
-begin_cutoff_3 = ceil(0.4*numel(dtvals)); end_cutoff_3 = ceil(1*numel(dtvals));
+begin_cutoff_1 = ceil(0.1*numel(dtvals)); end_cutoff_1 = ceil(0.4*numel(dtvals));
+begin_cutoff_2 = ceil(0.25*numel(dtvals)); end_cutoff_2 = ceil(0.7*numel(dtvals));
+begin_cutoff_3 = ceil(0.45*numel(dtvals)); end_cutoff_3 = ceil(1*numel(dtvals));
 
 % Nr=40, Nz=80
 loglog(dtvals, errors(:, 1, 1), 'black-', 'LineWidth', 1.5); hold on; % B. Euler
@@ -144,15 +147,16 @@ loglog(dtvals, errors(:, 3, 2), 'green-', 'LineWidth', 1.5); % DIRK3
 
 % loglog(dtvals, errors(:, 4), 'm-', 'LineWidth', 1.5); % DIRK4
 % loglog(dtvals(begin_cutoff_1:end_cutoff_1), 0.000002*dtvals(begin_cutoff_1:end_cutoff_1), 'black--', 'LineWidth', 1); % Order 1
-loglog(dtvals(begin_cutoff_1:end_cutoff_1), 0.8*dtvals(begin_cutoff_1:end_cutoff_1), 'black--', 'LineWidth', 1); % Order 1
+loglog(dtvals(begin_cutoff_1:end_cutoff_1), 0.1*dtvals(begin_cutoff_1:end_cutoff_1), 'black--', 'LineWidth', 1); % Order 1
 % loglog(dtvals(begin_cutoff_2:end_cutoff_2), 0.00000015*dtvals(begin_cutoff_2:end_cutoff_2).^2, 'blue--', 'LineWidth', 1); % Order 2
-loglog(dtvals(begin_cutoff_2:end_cutoff_2), 4*dtvals(begin_cutoff_2:end_cutoff_2).^2, 'blue--', 'LineWidth', 1); % Order 2
+loglog(dtvals(begin_cutoff_2:end_cutoff_2), 0.06*dtvals(begin_cutoff_2:end_cutoff_2).^2, 'blue--', 'LineWidth', 1); % Order 2
 % loglog(dtvals(begin_cutoff_3:end_cutoff_3), 0.000000008*dtvals(begin_cutoff_3:end_cutoff_3).^3, 'green--', 'LineWidth', 1); % Order 3
-loglog(dtvals(begin_cutoff_3:end_cutoff_3), 24*dtvals(begin_cutoff_3:end_cutoff_3).^3, 'green--', 'LineWidth', 1); % Order 3
+loglog(dtvals(begin_cutoff_3:end_cutoff_3), 0.02*dtvals(begin_cutoff_3:end_cutoff_3).^3, 'green--', 'LineWidth', 1); % Order 3
 % loglog(dtvals(ceil(cutoff*end):end), 0.000009*dtvals(ceil(cutoff*end):end).^4, 'm--', 'LineWidth', 1); % Order 4
 % title(sprintf('RAIL Temporal Convergence at tf=%s, Nr = %s, Nz = %s', num2str(tf), num2str(Nr), num2str(Nz))); 
-xlabel('\Deltat'); ylabel('L_1 Error');
+xlabel('\Deltat'); ylabel('L^1 Error');
 legend('Backward Euler', 'DIRK2', 'DIRK3', '', '', '', 'Order 1', 'Order 2', 'Order 3', 'location','northwest');
+ylim([1e-4, 9e-1]);
 fontsize(18,"points");
 set(gcf,'Units','pixels','Position',[100 100 800 500])
 saveas(gcf, './Plots/heat_eqn_temporal_error_single_spatial.fig');
@@ -160,8 +164,8 @@ exportgraphics(gcf,'./Plots/heat_eqn_temporal_error.pdf','ContentType','vector')
 
 %% 4. Mass conservation
 figure(4); clf; 
-plot(tvals(2:end), abs(mass(2:end)-mass(1))/mass(1), 'LineWidth', 1.5);
-xlabel('t'); ylabel('Relative mass'); title('Relative mass of numerical solution');
+plot(tvals, abs(mass), 'LineWidth', 1.5);
+xlabel('t'); ylabel('Mass'); % title('Relative mass of numerical solution');
 
 
 
