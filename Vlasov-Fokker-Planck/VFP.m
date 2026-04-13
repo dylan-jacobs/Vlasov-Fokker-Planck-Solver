@@ -5,10 +5,11 @@ soln = load("vdfp_refsoln_IMEX222_Nx160_Nvperp200_Nvpar200_T1_tole-8_dt10-3.mat"
 soln = soln.f_vals_low_rank;
 
 DTvals = 0.2:0.02:0.9; % for error plot
-DTvals = 0.4;        % for all other tests
+% DTvals = 0.4;        % for all other tests
 
 % time-stepping method: 1=B.Euler, 2=DIRK2
 methods = ['1', '2'];
+methods = '1';
 
 ERRORS = zeros(5, numel(DTvals));
 
@@ -18,13 +19,13 @@ for dt_index = 1:numel(DTvals)
     tolerance = 1e-8;
     
     % mesh parameters
-    Nx = 80;
-    Nr = 100;
-    Nz = 100;
+    Nx = 160;
+    Nr = 200;
+    Nz = 200;
     x_min = 0;
     x_max = 200;
     interval = [x_min, x_max, 0, 8, -8, 8]; % 1D in x, 2D in v (x interval, r interval, z interval)
-    tf = 250;
+    tf = 1;
 
     % initial rank
     r0 = 10;
@@ -407,28 +408,28 @@ for dt_index = 1:numel(DTvals)
         % save('vdfp_refsoln_IMEX222_Nx160_Nvperp200_Nvpar200_T1_tole-8_dt10-3.mat','f_vals_low_rank');
         % return
 
-        % % Compute errors
-        % error = zeros(Nx, 1);
-        % soln_n = zeros(Nx, 1);
-        % soln_u = zeros(Nx, 1);
-        % soln_Ta = zeros(Nx, 1);
-        % linf_error = 0;
-        % 
-        % for i = 1:Nx
-        %     f = f_vals_low_rank{i, 1}*f_vals_low_rank{i, 2}*f_vals_low_rank{i, 3}';
-        %     f_exact = soln{i, 1}*soln{i, 2}*soln{i, 3}';
-        %     error(i) = 2*pi*dr*dz*sum(sum(abs(f - f_exact) .* Rmat));
-        %     linf_error = max(linf_error, max(max(abs(f - f_exact))));
-        % 
-        %     soln_n(i) = 2*pi*dr*dz*sum(sum(f_exact.*Rmat));
-        %     soln_u(i) = (1/soln_n(i))*2*pi*dr*dz*sum(sum(Zmat.*f_exact.*Rmat));
-        %     soln_Ta(i) = (2*pi*dr*dz*sum(sum((Rmat.^2 + Zmat.^2).*f_exact.*Rmat)) - soln_n(i)*soln_u(i)^2)/(3*soln_n(i)/ma);
-        % end
-        % ERRORS(1, dt_index) = dx*sum(error)/(200*16*8);
-        % ERRORS(2, dt_index) = dx*sum(abs(n_vals - soln_n))/200;
-        % ERRORS(3, dt_index) = dx*sum(abs(u_para - soln_u))/200;
-        % ERRORS(4, dt_index) = dx*sum(abs(Ta_vals - soln_Ta))/200;
-        % ERRORS(5, dt_index) = linf_error;
+        % Compute errors
+        error = zeros(Nx, 1);
+        soln_n = zeros(Nx, 1);
+        soln_u = zeros(Nx, 1);
+        soln_Ta = zeros(Nx, 1);
+        linf_error = 0;
+
+        for i = 1:Nx
+            f = f_vals_low_rank{i, 1}*f_vals_low_rank{i, 2}*f_vals_low_rank{i, 3}';
+            f_exact = soln{i, 1}*soln{i, 2}*soln{i, 3}';
+            error(i) = 2*pi*dr*dz*sum(sum(abs(f - f_exact) .* Rmat));
+            linf_error = max(linf_error, max(max(abs(f - f_exact))));
+
+            soln_n(i) = 2*pi*dr*dz*sum(sum(f_exact.*Rmat));
+            soln_u(i) = (1/soln_n(i))*2*pi*dr*dz*sum(sum(Zmat.*f_exact.*Rmat));
+            soln_Ta(i) = (2*pi*dr*dz*sum(sum((Rmat.^2 + Zmat.^2).*f_exact.*Rmat)) - soln_n(i)*soln_u(i)^2)/(3*soln_n(i)/ma);
+        end
+        ERRORS(1, dt_index) = dx*sum(error)/(200*16*8);
+        ERRORS(2, dt_index) = dx*sum(abs(n_vals - soln_n))/200;
+        ERRORS(3, dt_index) = dx*sum(abs(u_para - soln_u))/200;
+        ERRORS(4, dt_index) = dx*sum(abs(Ta_vals - soln_Ta))/200;
+        ERRORS(5, dt_index) = linf_error;
     end
 end
 
@@ -447,23 +448,23 @@ c_brown  = [0.5490 0.3373 0.2941];
 c_pink   = [0.8902 0.4667 0.7608];
 c_gray   = [0.4980 0.4980 0.4980];
 
-% % Temporal error plot
-% figure(1); clf;
-% loglog(DTvals, ERRORS(1, :), '-', 'Color', c_blue, 'LineWidth', 1.5); hold on; % L1
-% % loglog(DTvals, ERRORS(5, :), '-', 'Color', c_purple,  'LineWidth', 1.5); hold on; % Linf
-% loglog(DTvals, ERRORS(2, :), '-', 'Color', c_orange, 'LineWidth', 1.5); hold on; % nvals
-% loglog(DTvals, ERRORS(3, :), '-', 'Color', c_green,  'LineWidth', 1.5); hold on; % uvals
-% loglog(DTvals, ERRORS(4, :), '-', 'Color', c_red,  'LineWidth', 1.5); hold on; % Tvals
-% % loglog(DTvals, 9e-3*(DTvals .^ 1), '--', 'Color', c_gray, 'LineWidth', 1.5); % order 1 ref
+% Temporal error plot
+figure(1); clf;
+loglog(DTvals, ERRORS(1, :), '-', 'Color', c_blue, 'LineWidth', 1.5); hold on; % L1
+% loglog(DTvals, ERRORS(5, :), '-', 'Color', c_purple,  'LineWidth', 1.5); hold on; % Linf
+loglog(DTvals, ERRORS(2, :), '-', 'Color', c_orange, 'LineWidth', 1.5); hold on; % nvals
+loglog(DTvals, ERRORS(3, :), '-', 'Color', c_green,  'LineWidth', 1.5); hold on; % uvals
+loglog(DTvals, ERRORS(4, :), '-', 'Color', c_red,  'LineWidth', 1.5); hold on; % Tvals
+loglog(DTvals, 9e-5*(DTvals .^ 1), '--', 'Color', c_gray, 'LineWidth', 1.5); % order 1 ref
 % loglog(DTvals, 2e-5*(DTvals .^ 2), '--', 'Color', c_gray, 'LineWidth', 1.5); % order 2 ref
-% ylim([1e-7, 5e-4]);
-% xlabel('dt'); ylabel('L_1 error'); % title('Error plot');
-% legend('||f - f_{exact}||_1', '||n - n_{exact}||_1', '||u - u_{exact}||_1', '||T_a - T_{a, exact}||_1', 'Order 2', 'Location', 'northwest'); 
-% fontsize(18,"points");
-% set(gcf,'Units','pixels','Position', [100 100 800 500]);
-% saveas(gcf, './Plots/VFP_temporal_error_IMEX222.fig');
-% exportgraphics(gcf,'./Plots/VFP_temporal_error_IMEX222.pdf','ContentType','vector')
-% return
+ylim([2e-6, 5e-2]);
+xlabel('dt'); ylabel('L^1 error'); % title('Error plot');
+legend('||f - f_{exact}||_1', '||n - n_{exact}||_1', '||u - u_{exact}||_1', '||T_a - T_{a, exact}||_1', 'Order 1', 'Location', 'northwest'); 
+fontsize(18,"points");
+set(gcf,'Units','pixels','Position', [100 100 800 500]);
+saveas(gcf, './Plots/VFP_temporal_error_IMEX111.fig');
+exportgraphics(gcf,'./Plots/VFP_temporal_error_IMEX111.pdf','ContentType','vector')
+return
 
 % Macroscopic moments
 figure(2); clf;
@@ -476,9 +477,9 @@ legend('n', 'nu_{||}', 'T_e', 'T_a', 'Location', 'east');
 xlabel('x'); ylabel('Magnitude'); % title(sprintf('Mass, momentum, ion temperature, and electron temperature at t=%s', num2str(tval)));
 fontsize(18,"points");
 set(gcf,'Units','pixels','Position', [100 100 800 500]);
-saveas(gcf, './Plots/VFP_macro_moments.fig');
-exportgraphics(gcf,'./Plots/VFP_macro_moments.pdf','ContentType','vector')
-
+saveas(gcf, './Plots/VFP_macro_moments_tf_100.fig');
+exportgraphics(gcf,'./Plots/VFP_macro_moments_tf_100.pdf','ContentType','vector')
+return
 % Structure conservation
 figure(3); clf; 
 plot(tvals, abs(mass-mass(1))/mass(1), 'LineWidth', 1.5); hold on;
